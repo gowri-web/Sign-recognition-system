@@ -5,7 +5,7 @@ import numpy as np
 import cv2
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-
+from flask import Flask, render_template, request, jsonify
 # Lightweight ML Imports
 from skimage.feature import hog
 from scipy.spatial.distance import euclidean
