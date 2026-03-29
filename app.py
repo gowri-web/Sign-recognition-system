@@ -137,7 +137,9 @@ def get_reference():
             return jsonify({"success": True, "signatureB64": b64_string})
     
     return jsonify({"success": False, "error": "User not found"}), 404
-
+@app.route('/')
+def home():
+    return render_template('index.html')
 if __name__ == '__main__':
     init_db()
     # Port configuration for Render
