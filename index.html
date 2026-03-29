@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Signature Recognition System - Cloud Edition</title>
+    <style>
+        :root {
+            --sidebar-bg: #d4cc8c;
+            --main-bg: #ccc484;
+            --card-bg: #f5f3e7;
+            --btn-blue: #3b71ed;
+            --btn-green: #198754;
+            --btn-red: #dc3545;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            background-color: var(--main-bg);
+        }
+
+        /* Sidebar Styling */
+        .sidebar {
+            width: 300px;
+            background-color: var(--sidebar-bg);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            border-right: 1px solid rgba(0,0,0,0.1);
+        }
+
+        .main-content {
+            flex: 1;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-y: auto;
+        }
+
+        .card {
+            background: var(--card-bg);
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 800px;
+        }
+
+        .drop-zone {
+            border: 2px dashed #aaa;
+            border-radius: 8px;
+            height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+            position: relative;
+            background: #fff;
+            overflow: hidden;
+        }
+
+        .preview-img {
+            max-width: 100%;
+            max-height: 100%;
+            display: none;
+        }
+
+        .btn {
+            padding: 12px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            color: white;
+            font-weight: 600;
+            transition: background 0.3s;
+        }
+
+        .btn-blue { background-color: var(--btn-blue); }
+        .btn-green { background-color: var(--btn-green); }
+
+        #status-area {
+            margin-top: 30px;
+            text-align: center;
+        }
+
+        #status-text {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .metrics {
+            font-size: 1.1rem;
+            color: #444;
+            background: rgba(255,255,255,0.5);
+            padding: 10px 20px;
+            border-radius: 20px;
+        }
+
+        input[type="text"] {
+            width: 90%;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #999;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <h2>Lab Control</h2>
+        <div>
+            <label><strong>1. Enter User ID:</strong></label><br><br>
+            <input type="text" id="userId" placeholder="e.g. user_01">
+        </div>
+        <button class="btn btn-blue" onclick="fetchReference()">Load Reference</button>
+        <hr>
+        <button class="btn btn-green" style="font-size: 1.2rem;" onclick="recognize()">RUN VERIFICATION</button>
+    </div>
+
+    <div class="main-content">
+        <div class="card">
+            <h3>Reference Signature (Stored)</h3>
+            <div class="drop-zone" id="refZone">
+                <img id="refPreview" class="preview-img" src="" alt="Reference">
+                <p id="refText">Reference will appear here</p>
+            </div>
+
+            <h3>Test Signature (Input)</h3>
+            <div class="drop-zone" id="inputZone">
+                <input type="file" id="fileInput" hidden onchange="handleFile(this)">
+                <img id="inputPreview" class="preview-img" src="" alt="Input">
+                <p id="inputText" onclick="document.getElementById('fileInput').click()" style="cursor:pointer;">Click to Upload Image</p>
+            </div>
+        </div>
+
+        <div id="status-area">
+            <div id="status-text">SYSTEM READY</div>
+            <div id="metrics-text" class="metrics" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        /** * REPLACE THE URL BELOW WITH YOUR RENDER URL 
+         * Example: https://my-signature-app.onrender.com/api
+         */
+        const API_URL = 'https://your-app-name.onrender.com/api';
+
+        let refBase64 = "";
+        let inputBase64 = "";
+
+        // Function to fetch reference image from SQLite via Backend
+        async function fetchReference() {
+            const userId = document.getElementById('userId').value;
+            if(!userId) return alert("Please enter a User ID first.");
+
+            try {
+                const res = await fetch(`${API_URL}/get_reference?userId=${userId}`);
+                const data = await res.json();
+                
+                if(data.success) {
+                    refBase64 = data.signatureB64;
+                    document.getElementById('refPreview').src = `data:image/png;base64,${refBase64}`;
+                    document.getElementById('refPreview').style.display = 'block';
+                    document.getElementById('refText').style.display = 'none';
+                } else {
+                    alert("User not found in the database.");
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Error connecting to the cloud server.");
+            }
+        }
+
+        // Function to handle local file upload
+        function handleFile(input) {
+            const file = input.files[0];
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                // Strip the metadata prefix (e.g., "data:image/png;base64,")
+                inputBase64 = e.target.result.split(',')[1];
+                document.getElementById('inputPreview').src = e.target.result;
+                document.getElementById('inputPreview').style.display = 'block';
+                document.getElementById('inputText').style.display = 'none';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Function to send both images for MSE and HOG comparison
+        async function recognize() {
+            if(!inputBase64 || !refBase64) {
+                return alert("Please ensure both Reference and Test signatures are loaded.");
+            }
+            
+            const statusDiv = document.getElementById('status-text');
+            const metricsDiv = document.getElementById('metrics-text');
+            
+            statusDiv.innerText = "PROCESSING...";
+            statusDiv.style.color = "#333";
+            metricsDiv.style.display = "none";
+
+            try {
+                const res = await fetch(`${API_URL}/recognize`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ 
+                        input_image_b64: inputBase64, 
+                        reference_image_b64: refBase64 
+                    })
+                });
+                const data = await res.json();
+                
+                metricsDiv.style.display = "block";
+                metricsDiv.innerHTML = `Similarity: <strong>${data.similarity}%</strong> | MSE: <strong>${data.mse_score}</strong>`;
+
+                if(data.is_match) {
+                    statusDiv.innerText = "VERIFIED MATCH";
+                    statusDiv.style.color = "var(--btn-green)";
+                } else {
+                    statusDiv.innerText = "INVALID SIGNATURE";
+                    statusDiv.style.color = "var(--btn-red)";
+                }
+
+            } catch (err) {
+                statusDiv.innerText = "CONNECTION ERROR";
+                console.error(err);
+            }
+        }
+    </script>
+</body>
+</html>
