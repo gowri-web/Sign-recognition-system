@@ -1,7 +1,6 @@
 flask
 flask-cors
-numpy
 opencv-python-headless
+numpy
 scikit-image
-scipy
 gunicorn
